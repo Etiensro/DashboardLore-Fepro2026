@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Iniciar Sesión — LORE Panel Docente{% endblock %}
+{% block meta_desc %}Acceso al Panel Docente de LORE. Sistema institucional de gestión de partidas educativas.{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+
+  <!-- Tarjeta de login -->
+  <div class="auth-card" role="region" aria-label="Formulario de inicio de sesión">
+
+    <!-- Encabezado de la tarjeta -->
+    <div class="auth-card-header">
+      <div class="auth-logomark" aria-hidden="true">
+        <img src="{{ url_for('static', filename='img/logo_buap.png') }}" alt="Logo BUAP" class="auth-logo-img" />
+      </div>
+
+      <h1 class="auth-title">Acceso Docente</h1>
+      <p class="auth-subtitle">Ingresa tus credenciales institucionales para continuar</p>
+    </div>
+
+    <!-- Formulario -->
+    <form
+      id="login-form"
+      method="POST"
+      action="{{ url_for('login') }}"
+      class="auth-form"
+      novalidate
+      aria-label="Formulario de inicio de sesión LORE"
+    >
+      <!-- Mensaje de error inline -->
+      {% if error %}
+        <div class="form-error-banner" role="alert" aria-live="assertive">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span>{{ error }}</span>
+        </div>
+      {% endif %}
+
+      <!-- Campo: Usuario -->
+      <div class="form-group">
+        <label class="form-label" for="usuario">Usuario</label>
+        <div class="input-wrap">
+          <span class="input-icon" aria-hidden="true">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+          </span>
+          <input
+            type="text"
+            id="usuario"
+            name="usuario"
+            class="form-input"
+            placeholder="ej. docente"
+            autocomplete="username"
+            required
+            aria-required="true"
+            aria-label="Campo de nombre de usuario"
+          />
+        </div>
+      </div>
+
+      <!-- Campo: Contraseña -->
+      <div class="form-group">
+        <label class="form-label" for="password">Contraseña</label>
+        <div class="input-wrap">
+          <span class="input-icon" aria-hidden="true">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+            </svg>
+          </span>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            class="form-input"
+            placeholder="••••••••"
+            autocomplete="current-password"
+            required
+            aria-required="true"
+            aria-label="Campo de contraseña"
+          />
+        </div>
+      </div>
+
+      <!-- Botón de ingreso -->
+      <button
+        type="submit"
+        id="btn-login"
+        class="btn-primary btn-full"
+        aria-label="Iniciar sesión en el Panel Docente LORE"
+      >
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+        </svg>
+        Ingresar
+      </button>
+    </form>
+
+    <!-- Pie de la tarjeta — credenciales de prueba -->
+    <div class="auth-hint" role="note" aria-label="Credenciales de prueba para desarrollo">
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span>Demo: <code>docente</code> / <code>lore2024</code></span>
+    </div>
+
+  </div><!-- /auth-card -->
+
+</div><!-- /auth-container -->
+{% endblock %}

@@ -1,0 +1,31 @@
+# Entorno virtual Python
+venv/
+.venv/
+env/
+
+# Credenciales Firebase (NUNCA subir al repo)
+serviceAccountKey.json
+
+# Archivos temporales Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Flask
+instance/
+.webassets-cache
+
+# Variables de entorno
+.env
+.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Uploads temporales
+uploads/

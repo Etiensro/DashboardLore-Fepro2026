@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Sala {{ codigo }} — LORE Panel Docente{% endblock %}
+{% block meta_desc %}Sala activa {{ codigo }} — Comparte este código con tus alumnos para unirse al escape room educativo.{% endblock %}
+
+{% block content %}
+<div class="sala-container">
+
+  <!-- Breadcrumb -->
+  <div class="page-breadcrumb" aria-label="Ruta de navegación">
+    <a href="{{ url_for('setup') }}" class="breadcrumb-link">Nueva Sala</a>
+    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+    <span class="breadcrumb-current">Sala Activa</span>
+  </div>
+
+  <!-- Tarjeta de éxito -->
+  <div class="sala-card" role="region" aria-labelledby="sala-title">
+
+    <!-- Badge de estado -->
+    <div class="sala-status-badge" role="status" aria-live="polite">
+      <span class="sala-status-dot" aria-hidden="true"></span>
+      <span>Sala activa</span>
+    </div>
+
+    <!-- Icono de éxito -->
+    <div class="sala-success-icon" aria-hidden="true">
+      <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+      </svg>
+    </div>
+
+    <!-- Encabezado -->
+    <h1 class="sala-title" id="sala-title">¡Sala generada con éxito!</h1>
+    <p class="sala-desc">
+      Comparte el siguiente código con tus alumnos para que se unan a la sesión de escape room.
+    </p>
+
+    <!-- Separador -->
+    <div class="sala-divider" aria-hidden="true"></div>
+
+    <!-- Código de sala (protagonista) -->
+    <div class="sala-code-section">
+      <p class="sala-code-label">Código de la sala</p>
+      <div
+        class="sala-code-display"
+        id="sala-codigo"
+        role="text"
+        aria-label="Código de la sala: {{ codigo }}"
+        tabindex="0"
+        title="Haz clic para copiar el código"
+      >{{ codigo }}</div>
+
+      <!-- Botón copiar -->
+      <button
+        type="button"
+        id="btn-copiar"
+        class="btn-copy"
+        aria-label="Copiar código {{ codigo }} al portapapeles"
+        onclick="copiarCodigo()"
+      >
+        <svg id="icon-copy" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+        </svg>
+        <span id="copy-label">Copiar código</span>
+      </button>
+
+      <!-- Toast inline de copiado -->
+      <div class="copy-toast" id="copy-toast" role="status" aria-live="polite" aria-atomic="true">
+        ✓ ¡Copiado!
+      </div>
+    </div>
+
+    <!-- Separador -->
+    <div class="sala-divider" aria-hidden="true"></div>
+
+    <!-- Instrucciones rápidas -->
+    <div class="sala-instructions" role="note" aria-label="Instrucciones para los alumnos">
+      <h2 class="sala-instructions-title">Instrucciones para los alumnos</h2>
+      <ol class="sala-steps-list">
+        <li>Acceder a la plataforma LORE desde su dispositivo</li>
+        <li>Seleccionar "Unirse a sala"</li>
+        <li>Ingresar el código <strong>{{ codigo }}</strong> en el campo correspondiente</li>
+        <li>¡Comenzar el escape room!</li>
+      </ol>
+    </div>
+
+    <!-- Botones de acción -->
+    <div class="sala-actions">
+      <a
+        href="{{ url_for('dashboard') }}"
+        id="btn-ir-dashboard"
+        class="btn-primary btn-large"
+        aria-label="Ir al Dashboard de Resultados para monitorear el progreso"
+      >
+        <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+          <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+        Ir al Dashboard de Resultados
+      </a>
+      <a
+        href="{{ url_for('setup') }}"
+        id="btn-nueva-sala"
+        class="btn-secondary"
+        aria-label="Crear otra sala nueva"
+      >
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Crear otra sala
+      </a>
+    </div>
+
+  </div><!-- /sala-card -->
+
+</div><!-- /sala-container -->
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copiarCodigo() {
+  const codigo   = '{{ codigo }}';
+  const btn      = document.getElementById('btn-copiar');
+  const label    = document.getElementById('copy-label');
+  const toast    = document.getElementById('copy-toast');
+  const iconCopy = document.getElementById('icon-copy');
+
+  navigator.clipboard.writeText(codigo).then(() => {
+    // Feedback visual
+    btn.classList.add('copied');
+    label.textContent = '¡Copiado!';
+    iconCopy.innerHTML = '<polyline points="20 6 9 17 4 12"/>';
+    toast.classList.add('show');
+
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      label.textContent = 'Copiar código';
+      iconCopy.innerHTML = `
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>`;
+      toast.classList.remove('show');
+    }, 2500);
+  }).catch(() => {
+    // Fallback
+    const el = document.getElementById('sala-codigo');
+    const range = document.createRange();
+    range.selectNode(el);
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+    try { document.execCommand('copy'); } catch (e) {}
+    window.getSelection().removeAllRanges();
+  });
+}
+
+// También al hacer clic en el código directamente
+document.getElementById('sala-codigo').addEventListener('click', copiarCodigo);
+</script>
+{% endblock %}

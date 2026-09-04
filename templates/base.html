@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}LORE — Panel Docente{% endblock %}</title>
+  <meta name="description" content="{% block meta_desc %}Sistema institucional LORE para gestión de partidas educativas tipo escape room.{% endblock %}" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}" />
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+  <!-- ═══ HEADER GLOBAL ══════════════════════════════════════════════ -->
+  <header class="site-header" role="banner">
+    <div class="header-inner">
+      <div class="header-brand">
+        <div class="brand-logomark" aria-hidden="true">
+          <img src="{{ url_for('static', filename='img/logo_buap.png') }}" alt="Logo BUAP" class="brand-logo-img" />
+        </div>
+
+        <div class="brand-label">
+          <span class="brand-name">LORE</span>
+          <span class="brand-divider" aria-hidden="true">|</span>
+          <span class="brand-subtitle">Panel Docente</span>
+        </div>
+      </div>
+
+      <nav class="header-nav" aria-label="Navegación principal">
+        {% if session.get('logged_in') %}
+          <a href="{{ url_for('setup') }}"     class="nav-link {% if request.endpoint == 'setup' %}active{% endif %}">Nueva Sala</a>
+          <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">Dashboard</a>
+          <a href="{{ url_for('logout') }}"    class="nav-link nav-link--logout">Cerrar sesión</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  <!-- ═══ FLASH MESSAGES ═══════════════════════════════════════════════ -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-wrapper" role="alert" aria-live="polite">
+        {% for cat, msg in messages %}
+          <div class="flash flash--{{ cat }}">
+            <span>{{ msg }}</span>
+            <button type="button" class="flash-close" aria-label="Cerrar" onclick="this.parentElement.remove()">×</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- ═══ CONTENIDO PRINCIPAL ═══════════════════════════════════════════ -->
+  <main class="page-main" role="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- ═══ FOOTER ════════════════════════════════════════════════════════ -->
+  <footer class="site-footer" role="contentinfo">
+    <span>LORE — Sistema de Analítica Educativa · v1.0</span>
+    <span>Institución · Uso Docente</span>
+  </footer>
+
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

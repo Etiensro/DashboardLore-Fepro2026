@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard de Resultados — LORE Panel Docente{% endblock %}
+{% block meta_desc %}Panel de métricas institucionales LORE. Monitoreo en tiempo real del rendimiento estudiantil en actividades de escape room educativo.{% endblock %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}" />
+{% endblock %}
+
+{% block content %}
+
+  <!-- Barra de contexto -->
+  <div class="context-bar">
+    <div class="context-breadcrumb" aria-label="Ruta de navegación">
+      <span>Dashboard</span>
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+      <span>Seguimiento Académico</span>
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="breadcrumb-current">Resultados — Escape Room</span>
+    </div>
+  </div>
+
+
+  <!-- ═══ KPI CARDS ═════════════════════════════════════════════════════ -->
+  <section class="kpi-grid" aria-label="Indicadores clave de rendimiento">
+
+    <article class="kpi-card" aria-labelledby="kpi1-title">
+      <div class="kpi-icon kpi-icon--blue" aria-hidden="true">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+        </svg>
+      </div>
+      <div class="kpi-body">
+        <p class="kpi-label" id="kpi1-title">Alumnos Evaluados</p>
+        <div class="kpi-value-row">
+          <span class="kpi-value" id="val-alumnos">—</span>
+        </div>
+        <p class="kpi-note">Total de documentos en la colección</p>
+      </div>
+    </article>
+
+    <article class="kpi-card" aria-labelledby="kpi2-title">
+      <div class="kpi-icon kpi-icon--green" aria-hidden="true">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="kpi-body">
+        <p class="kpi-label" id="kpi2-title">Tasa de Victorias</p>
+        <div class="kpi-value-row">
+          <span class="kpi-value" id="val-victorias">—</span>
+        </div>
+        <div class="kpi-track" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-labelledby="kpi2-title">
+          <div class="kpi-fill kpi-fill--green" id="fill-victorias" style="--w:0%"></div>
+        </div>
+        <p class="kpi-note" id="note-victorias">estado_final === "victoria"</p>
+      </div>
+    </article>
+
+    <article class="kpi-card" aria-labelledby="kpi3-title">
+      <div class="kpi-icon kpi-icon--slate" aria-hidden="true">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+      </div>
+      <div class="kpi-body">
+        <p class="kpi-label" id="kpi3-title">Efectividad Global</p>
+        <div class="kpi-value-row">
+          <span class="kpi-value" id="val-efectividad">—</span>
+        </div>
+        <div class="kpi-track" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-labelledby="kpi3-title">
+          <div class="kpi-fill" id="fill-efectividad" style="--w:0%"></div>
+        </div>
+        <p class="kpi-note">(total_aciertos / total_disparos) × 100</p>
+      </div>
+    </article>
+
+  </section>
+
+  <!-- ═══ GRÁFICAS ══════════════════════════════════════════════════════ -->
+  <section class="charts-grid" aria-label="Análisis de conceptos dominados y a reforzar">
+
+    <article class="chart-card" aria-labelledby="chart1-title">
+      <div class="chart-header">
+        <div class="chart-header-icon chart-header-icon--blue" aria-hidden="true">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </div>
+        <div>
+          <h2 class="chart-title" id="chart1-title">Conceptos Dominados</h2>
+          <p class="chart-sub">Top 5 palabras más frecuentes en <code>historial_aciertos</code></p>
+        </div>
+      </div>
+      <div class="chart-body">
+        <canvas id="chartAciertos" role="img" aria-label="Gráfica de barras — top 5 conceptos dominados"></canvas>
+      </div>
+    </article>
+
+    <article class="chart-card" aria-labelledby="chart2-title">
+      <div class="chart-header">
+        <div class="chart-header-icon chart-header-icon--red" aria-hidden="true">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div>
+          <h2 class="chart-title" id="chart2-title">Conceptos a Reforzar</h2>
+          <p class="chart-sub">Top 5 palabras más frecuentes en <code>historial_errores</code></p>
+        </div>
+      </div>
+      <div class="chart-body">
+        <canvas id="chartErrores" role="img" aria-label="Gráfica de barras — top 5 conceptos a reforzar"></canvas>
+      </div>
+    </article>
+
+  </section>
+
+  <!-- ═══ PANEL INFERIOR: tabla + aside ═════════════════════════════════ -->
+  <section class="bottom-grid" aria-label="Resultados individuales y alertas pedagógicas">
+
+    <!-- Tabla -->
+    <div class="table-card">
+      <div class="table-card-head">
+        <div>
+          <h2 class="section-title">Tabla de Resultados</h2>
+          <p class="section-sub">Actualización en tiempo real · <span id="student-count">—</span> registros</p>
+        </div>
+        <div class="table-toolbar">
+          <div class="search-wrap">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input
+              type="search"
+              id="search-input"
+              class="search-input"
+              placeholder="Buscar alumno_id…"
+              aria-label="Buscar alumno por ID en la tabla de resultados"
+            />
+          </div>
+          <button class="btn-export" id="btn-export" aria-label="Exportar tabla a CSV">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Exportar CSV
+          </button>
+        </div>
+      </div>
+      <div class="table-scroll" role="region" aria-label="Tabla con desplazamiento horizontal" tabindex="0">
+        <table class="students-table" aria-label="Registro de rendimiento individual por alumno">
+          <thead>
+            <tr>
+              <th scope="col">Alumno</th>
+              <th scope="col" class="tc">Estado</th>
+              <th scope="col" class="tc">Aciertos</th>
+              <th scope="col" class="tc">Errores</th>
+              <th scope="col" class="tc">Disparos</th>
+              <th scope="col" class="tc">Efectividad %</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-students">
+            <tr>
+              <td colspan="6" class="td-empty" aria-live="polite">
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span>Esperando conexión con Firestore…</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Aside: Alertas + Recomendaciones -->
+    <aside class="rec-card" aria-labelledby="rec-title">
+
+      <div class="alert-box" id="alert-box" role="alert" aria-live="polite">
+        <div class="alert-icon" aria-hidden="true">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div>
+          <p class="alert-label">Alerta Pedagógica</p>
+          <p class="alert-text" id="alert-text">Analizando historial_errores…</p>
+        </div>
+      </div>
+
+      <div class="rec-section">
+        <h2 class="rec-title" id="rec-title">Recomendaciones</h2>
+        <p class="rec-desc">Áreas de oportunidad identificadas a partir de <code>historial_errores</code> grupal.</p>
+        <ul class="rec-list" id="rec-list" aria-label="Lista de recomendaciones pedagógicas">
+          <li class="rec-item rec-item--loading"><span>Calculando recomendaciones…</span></li>
+        </ul>
+      </div>
+
+      <div class="rec-section">
+        <h3 class="rec-subtitle">Distribución de Resultados</h3>
+        <div class="dist-bars" aria-label="Distribución porcentual de victorias y derrotas">
+          <div class="dist-row">
+            <span class="dist-label">Victoria</span>
+            <div class="dist-track"><div class="dist-fill dist-fill--green" id="dist-victoria" style="--w:0%"></div></div>
+            <span class="dist-pct" id="dist-pct-victoria">—</span>
+          </div>
+          <div class="dist-row">
+            <span class="dist-label">Derrota</span>
+            <div class="dist-track"><div class="dist-fill dist-fill--red" id="dist-derrota" style="--w:0%"></div></div>
+            <span class="dist-pct" id="dist-pct-derrota">—</span>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+  </section>
+
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<!-- Firebase SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<!-- Firebase config (credenciales del proyecto) -->
+<script src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
+<script>
+  window.SERVER_DEMO_DATA = {{ demo_data | tojson | safe if demo_data else 'null' }};
+</script>
+<!-- Lógica del dashboard -->
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+
+<!-- Toast global -->
+<div class="toast" id="toast" role="alert" aria-live="assertive" aria-atomic="true"></div>
+{% endblock %}
