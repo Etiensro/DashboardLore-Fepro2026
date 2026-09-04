@@ -10,11 +10,121 @@
 .context-bar {
   display: flex; align-items: center; justify-content: space-between;
   flex-wrap: wrap; gap: 8px;
+  margin-bottom: 12px;
 }
 .context-right {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
 }
 .context-meta { font-size: .76rem; color: var(--slate-400); }
+
+/* ═══════════════════════════════════════════
+   ROOM CONTROL BAR (Filtro por Código de Sala)
+════════════════════════════════════════════ */
+.room-control-bar {
+  background: #fff;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius);
+  padding: 12px 18px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+.room-control-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.room-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .84rem;
+  font-weight: 600;
+  color: var(--navy);
+  white-space: nowrap;
+}
+.room-select-wrap {
+  position: relative;
+}
+.room-select {
+  background: var(--slate-50);
+  border: 1px solid var(--slate-300);
+  border-radius: var(--radius);
+  padding: 6px 32px 6px 12px;
+  font-size: .84rem;
+  font-weight: 600;
+  color: var(--navy);
+  cursor: pointer;
+  outline: none;
+  font-family: var(--font-mono, monospace);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%230F172A' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.room-select:focus {
+  border-color: var(--navy);
+  box-shadow: 0 0 0 3px var(--navy-pale);
+}
+.room-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.room-input {
+  background: var(--slate-50);
+  border: 1px solid var(--slate-300);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font-size: .84rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  font-family: var(--font-mono, monospace);
+  width: 140px;
+  outline: none;
+  text-transform: uppercase;
+  transition: border-color var(--transition);
+}
+.room-input:focus {
+  border-color: var(--navy);
+}
+.btn-room-apply {
+  background: var(--navy);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 7px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition);
+}
+.btn-room-apply:hover {
+  background: var(--navy-light);
+}
+.room-control-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.room-meta-pill {
+  font-size: .75rem;
+  font-weight: 500;
+  background: var(--navy-pale);
+  color: var(--navy);
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,43,91,0.12);
+  white-space: nowrap;
+}
 
 /* Connection badge */
 .conn-badge {
@@ -44,11 +154,11 @@
 }
 
 /* ═══════════════════════════════════════════
-   KPI GRID (3 tarjetas)
+   KPI GRID (4 tarjetas)
 ════════════════════════════════════════════ */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 14px;
 }
 .kpi-card {
@@ -66,6 +176,14 @@
 .kpi-icon--blue  { background: var(--navy-pale); color: var(--navy); }
 .kpi-icon--green { background: var(--green-bg);  color: var(--green); }
 .kpi-icon--slate { background: var(--slate-100); color: var(--slate-600); }
+.kpi-icon--amber { background: #FEF3C7;         color: #D97706; }
+
+.sala-badge {
+  display: inline-block; padding: 2px 7px;
+  background: var(--slate-100); color: var(--navy);
+  border-radius: 4px; font-weight: 600;
+  font-family: var(--font-mono, monospace); font-size: .75rem;
+}
 
 .kpi-body { flex: 1; min-width: 0; }
 .kpi-label {
@@ -261,6 +379,7 @@
 ════════════════════════════════════════════ */
 @media (max-width: 1100px) {
   .bottom-grid { grid-template-columns: 1fr; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 900px) {
   .charts-grid { grid-template-columns: 1fr; }

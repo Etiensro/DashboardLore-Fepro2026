@@ -427,8 +427,8 @@ def generate_questions(text: str, materia: str, tema: str) -> dict:
                 "materia":             materia,
                 "tema":                tema,
                 "extracto_texto":      texto_resumido[:120] if texto_resumido else f"conceptos de {tema}",
-                "cerradas":            cerradas if cerradas else get_mock_questions(materia, tema, text)["cerradas"],
-                "abiertas":            abiertas if abiertas else get_mock_questions(materia, tema, text)["abiertas"],
+                "cerradas":            cerradas,
+                "abiertas":            abiertas,
                 "nivel_1":             n1_data,
                 "nivel_2":             resto_data.get("nivel_2", {}),
                 "nivel_3":             resto_data.get("nivel_3", {}),
@@ -443,7 +443,6 @@ def generate_questions(text: str, materia: str, tema: str) -> dict:
     # Fallback si falla la llamada
     mock_res = get_mock_questions(materia, tema, text)
     mock_res["generado_con_ia"] = False
-    mock_res["telemetria_simulada"] = generate_dynamic_telemetry(["PROMEDIO", "MEDIANA", "MODA", "MUESTRA", "POBLACIÓN"])
     return mock_res
 
 
@@ -572,16 +571,27 @@ def confirmar():
     if db:
         try:
             sala_doc = {
-                "codigo":     codigo,
-                "materia":    materia,
-                "tema":       tema,
-                "preguntas":  questions,
-                "creado_por": session.get("usuario", "desconocido"),
-                "activa":     True,
-                "timestamp":  firestore.SERVER_TIMESTAMP,
+                "codigo":          codigo,
+                "materia":         materia,
+                "tema":            tema,
+                "activa":          True,
+                "creado_por":      session.get("usuario", "docente"),
+                "extracto_texto":  questions.get("extracto_texto", ""),
+                "generado_con_ia": questions.get("generado_con_ia", True),
+                "timestamp":       firestore.SERVER_TIMESTAMP,
+                "preguntas": {
+                    "abiertas": questions.get("abiertas", []),
+                    "cerradas": questions.get("cerradas", [])
+                },
+                "nivel_1": questions.get("nivel_1", {}),
+                "nivel_2": questions.get("nivel_2", {}),
+                "nivel_3": questions.get("nivel_3", {}),
+                "nivel_4": questions.get("nivel_4", {})
             }
+            # Guardar en ambas referencias de colección (con guion y con guion bajo) para 100% de compatibilidad
+            db.collection("salas-activas").document(codigo).set(sala_doc)
             db.collection("salas_activas").document(codigo).set(sala_doc)
-            print(f"[LORE] Sala '{codigo}' confirmada y guardada en Firestore.")
+            print(f"[LORE] Sala '{codigo}' confirmada y guardada en 'salas-activas' y 'salas_activas'.")
 
             # ── Guardar preguntas individuales en colección 'preguntas' ──────────
             batch = db.batch()
@@ -620,17 +630,6 @@ def confirmar():
                   f"{len(questions.get('abiertas', []))} abiertas guardadas en colección 'preguntas' "
                   f"con codigo_sala='{codigo}'.")
 
-            # Guardar telemetría simulada adaptada al PDF en Firestore
-            if "telemetria_simulada" in questions:
-                tel_batch = db.batch()
-                for student in questions["telemetria_simulada"]:
-                    doc_ref = db.collection("telemetria_resultados").document(student["alumno_id"])
-                    s_data = dict(student)
-                    s_data["timestamp"] = firestore.SERVER_TIMESTAMP
-                    tel_batch.set(doc_ref, s_data)
-                tel_batch.commit()
-                print("[LORE] Telemetría simulada del PDF sincronizada en Firestore.")
-
         except Exception as exc:
             print(f"[LORE] Error Firestore: {exc}")
             flash(f"Advertencia: sala confirmada pero no guardada en Firestore ({exc}).", "warning")
@@ -651,8 +650,7 @@ def sala(codigo: str):
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    demo_data = session.get("demo_telemetria")
-    return render_template("dashboard.html", demo_data=demo_data)
+    return render_template("dashboard.html")
 
 
 
@@ -682,14 +680,24 @@ def upload_pdf_api():
         # Guardar en Firestore si está disponible
         if db:
             sala_doc = {
-                "codigo":     codigo,
-                "materia":    materia,
-                "tema":       tema,
-                "preguntas":  preguntas,
-                "creado_por": "api_externa",
-                "activa":     True,
-                "timestamp":  firestore.SERVER_TIMESTAMP
+                "codigo":          codigo,
+                "materia":         materia,
+                "tema":            tema,
+                "activa":          True,
+                "creado_por":      "api_externa",
+                "extracto_texto":  preguntas.get("extracto_texto", ""),
+                "generado_con_ia": preguntas.get("generado_con_ia", True),
+                "timestamp":       firestore.SERVER_TIMESTAMP,
+                "preguntas": {
+                    "abiertas": preguntas.get("abiertas", []),
+                    "cerradas": preguntas.get("cerradas", [])
+                },
+                "nivel_1": preguntas.get("nivel_1", {}),
+                "nivel_2": preguntas.get("nivel_2", {}),
+                "nivel_3": preguntas.get("nivel_3", {}),
+                "nivel_4": preguntas.get("nivel_4", {})
             }
+            db.collection("salas-activas").document(codigo).set(sala_doc)
             db.collection("salas_activas").document(codigo).set(sala_doc)
 
             # ── Guardar preguntas individuales en colección 'preguntas' ──────────
@@ -724,17 +732,6 @@ def upload_pdf_api():
 
             q_batch.commit()
             print(f"[LORE API] Preguntas guardadas en colección 'preguntas' con codigo_sala='{codigo}'.")
-
-            if "telemetria_simulada" in preguntas:
-                batch = db.batch()
-                for student in preguntas["telemetria_simulada"]:
-                    doc_ref = db.collection("telemetria_resultados").document(student["alumno_id"])
-                    s_data = dict(student)
-                    s_data["timestamp"] = firestore.SERVER_TIMESTAMP
-                    batch.set(doc_ref, s_data)
-                batch.commit()
-            print(f"[LORE API] Sala '{codigo}' y telemetría demostrativa guardadas en Firestore.")
-
             print(f"[LORE API] Sala '{codigo}' creada desde /upload-pdf y guardada en Firestore.")
         
         return jsonify({
@@ -745,69 +742,48 @@ def upload_pdf_api():
         })
     except Exception as exc:
         print(f"[LORE API] Error en /upload-pdf: {exc}")
-# ── /api/seed-telemetria (Insertar datos de telemetría simulados en Firestore) ──
+        return jsonify({"error": str(exc)}), 500
+
+
+# ── /api/seed-telemetria (Insertar datos de telemetría reales/de prueba en Firestore) ──
 @app.route('/api/seed-telemetria', methods=['POST', 'GET'])
 def seed_telemetria():
     """
-    Inserta o actualiza un bloque de datos simulados de telemetría académica
-    (Probabilidad y Estadística) en la colección 'telemetria_resultados' de Firestore.
+    Inserta un conjunto de datos de prueba adaptados al nuevo esquema
+    en la colección 'telemetria_resultados' (Doc ID: CKKAF_Alan, etc.)
     """
     mock_students = [
         {
-            "alumno_id": "ALUMNO_101",
+            "alumno_id": "Alan",
+            "codigo_sala": "CKKAF",
             "estado_final": "victoria",
-            "historial_aciertos": ["PROMEDIO", "MEDIANA", "MODA", "CUALITATIVO", "MUESTRA"],
-            "historial_errores": ["RANGO"],
-            "total_disparos": 6
+            "historial_aciertos": ["M_y = N_x", "f=c", "f=c", "Buscar factor integrante", "100", "2x + y^2 + 2xy dy/dx = 0", "Verdadero", "M_y = N_x"],
+            "historial_errores": ["f=x", "f=y", "x^2 + y^2 + xy dy/dx = 0"],
+            "total_intentos": 11
         },
         {
-            "alumno_id": "ALUMNO_102",
+            "alumno_id": "Sofia",
+            "codigo_sala": "CKKAF",
             "estado_final": "victoria",
-            "historial_aciertos": ["PROMEDIO", "CUALITATIVO", "POBLACIÓN", "MUESTRA", "PROBABILIDAD"],
-            "historial_errores": ["MEDIANA"],
-            "total_disparos": 7
+            "historial_aciertos": ["M_y = N_x", "f=c", "Buscar factor integrante", "100", "Verdadero", "M_y = N_x"],
+            "historial_errores": ["f=x"],
+            "total_intentos": 7
         },
         {
-            "alumno_id": "ALUMNO_103",
+            "alumno_id": "Carlos",
+            "codigo_sala": "CKKAF",
             "estado_final": "derrota",
-            "historial_aciertos": ["MUESTRA", "FRECUENCIA"],
-            "historial_errores": ["PROMEDIO", "MEDIANA", "RANGO"],
-            "total_disparos": 6
+            "historial_aciertos": ["M_y = N_x", "f=c"],
+            "historial_errores": ["f=x", "f=y", "x^2 + y^2 + xy dy/dx = 0", "Buscar factor integrante"],
+            "total_intentos": 6
         },
         {
-            "alumno_id": "ALUMNO_104",
+            "alumno_id": "Maria",
+            "codigo_sala": "CKKAF",
             "estado_final": "victoria",
-            "historial_aciertos": ["PROMEDIO", "MEDIANA", "MODA", "CUANTITATIVO", "FRECUENCIA"],
+            "historial_aciertos": ["M_y = N_x", "f=c", "Buscar factor integrante", "100", "2x + y^2 + 2xy dy/dx = 0", "Verdadero", "M_y = N_x", "f=c"],
             "historial_errores": [],
-            "total_disparos": 5
-        },
-        {
-            "alumno_id": "ALUMNO_105",
-            "estado_final": "derrota",
-            "historial_aciertos": ["CUALITATIVO"],
-            "historial_errores": ["PROMEDIO", "RANGO", "MEDIANA", "POBLACIÓN"],
-            "total_disparos": 5
-        },
-        {
-            "alumno_id": "ALUMNO_106",
-            "estado_final": "victoria",
-            "historial_aciertos": ["PROMEDIO", "MODA", "POBLACIÓN", "MUESTRA", "EVENTO"],
-            "historial_errores": ["ESPACIO MUESTRAL"],
-            "total_disparos": 6
-        },
-        {
-            "alumno_id": "ALUMNO_107",
-            "estado_final": "victoria",
-            "historial_aciertos": ["MEDIA", "MEDIANA", "MODA", "PROBABILIDAD", "FRECUENCIA"],
-            "historial_errores": ["RANGO"],
-            "total_disparos": 6
-        },
-        {
-            "alumno_id": "ALUMNO_108",
-            "estado_final": "derrota",
-            "historial_aciertos": ["EVENTO", "MUESTRA"],
-            "historial_errores": ["RANGO", "PROMEDIO", "MEDIANA"],
-            "total_disparos": 5
+            "total_intentos": 8
         }
     ]
     
@@ -815,15 +791,16 @@ def seed_telemetria():
         try:
             batch = db.batch()
             for student in mock_students:
-                doc_ref = db.collection("telemetria_resultados").document(student["alumno_id"])
+                doc_id = f"{student['codigo_sala']}_{student['alumno_id']}"
+                doc_ref = db.collection("telemetria_resultados").document(doc_id)
                 student_data = dict(student)
                 student_data["timestamp"] = firestore.SERVER_TIMESTAMP
                 batch.set(doc_ref, student_data)
             batch.commit()
-            print("[LORE] 8 registros de telemetría simulada insertados en Firestore.")
+            print("[LORE] Registros de telemetría insertados con el nuevo esquema en Firestore.")
             return jsonify({
                 "status": "success",
-                "message": "Datos de telemetría simulados guardados exitosamente en Firestore.",
+                "message": "Datos de telemetría guardados exitosamente en Firestore.",
                 "registros": len(mock_students)
             })
         except Exception as exc:
@@ -831,8 +808,8 @@ def seed_telemetria():
             return jsonify({"error": str(exc)}), 500
     else:
         return jsonify({
-            "status": "demo_local",
-            "message": "Firestore no configurado. El dashboard usará la simulación local de fallback.",
+            "status": "no_firebase",
+            "message": "Firestore no configurado.",
             "registros": mock_students
         })
 
