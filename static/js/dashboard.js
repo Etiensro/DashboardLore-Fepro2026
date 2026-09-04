@@ -1,13 +1,18 @@
 /**
- * LORE Dashboard — dashboard.js v3.0
+ * LORE Dashboard — dashboard.js v4.0
  *
  * RESTRICCION: Solo lectura. Usa onSnapshot para escuchar
- * telemetria_resultados. Ningun metodo escribe, actualiza
- * ni borra datos en Firestore.
+ * telemetria_resultados en Firestore. Sin datos simulados.
+ * Ningun metodo escribe, actualiza ni borra datos en Firestore.
  *
  * Coleccion leida: telemetria_resultados
- * Campos: alumno_id, estado_final, historial_aciertos[],
- *         historial_errores[], total_disparos
+ * Documento ID   : {codigo_sala}_{alumno_id}  (ej. CKKAF_Alan)
+ * Campos usados  : alumno_id, codigo_sala, estado_final,
+ *                  historial_aciertos[], historial_errores[], total_intentos
+ *
+ * Metricas:
+ *   - Precision  = Σaciertos / Σ(aciertos+errores) × 100  (preguntas variables)
+ *   - Prom.Intent= Σtotal_intentos / n_alumnos
  */
 
 'use strict';
@@ -32,76 +37,17 @@ Object.assign(Chart.defaults.plugins.tooltip, {
 });
 
 // ════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
 // 2. Estado de aplicacion (solo lectura)
 // ════════════════════════════════════════════════════════
-let chartAciertos  = null;
-let chartErrores   = null;
-let allDocs        = [];          // cache de documentos Firestore
-let unsubTelemetria = null;       // funcion de cancelacion onSnapshot
-let toastTimer     = null;
-
-// ════════════════════════════════════════════════════════
-// Datos simulados de respaldo (Probabilidad y Estadística)
-// ════════════════════════════════════════════════════════
-const MOCK_TELEMETRIA = [
-  {
-    alumno_id: "ALUMNO_101",
-    estado_final: "victoria",
-    historial_aciertos: ["PROMEDIO", "MEDIANA", "MODA", "CUALITATIVO", "MUESTRA"],
-    historial_errores: ["RANGO"],
-    total_disparos: 6
-  },
-  {
-    alumno_id: "ALUMNO_102",
-    estado_final: "victoria",
-    historial_aciertos: ["PROMEDIO", "CUALITATIVO", "POBLACIÓN", "MUESTRA", "PROBABILIDAD"],
-    historial_errores: ["MEDIANA"],
-    total_disparos: 7
-  },
-  {
-    alumno_id: "ALUMNO_103",
-    estado_final: "derrota",
-    historial_aciertos: ["MUESTRA", "FRECUENCIA"],
-    historial_errores: ["PROMEDIO", "MEDIANA", "RANGO"],
-    total_disparos: 6
-  },
-  {
-    alumno_id: "ALUMNO_104",
-    estado_final: "victoria",
-    historial_aciertos: ["PROMEDIO", "MEDIANA", "MODA", "CUANTITATIVO", "FRECUENCIA"],
-    historial_errores: [],
-    total_disparos: 5
-  },
-  {
-    alumno_id: "ALUMNO_105",
-    estado_final: "derrota",
-    historial_aciertos: ["CUALITATIVO"],
-    historial_errores: ["PROMEDIO", "RANGO", "MEDIANA", "POBLACIÓN"],
-    total_disparos: 5
-  },
-  {
-    alumno_id: "ALUMNO_106",
-    estado_final: "victoria",
-    historial_aciertos: ["PROMEDIO", "MODA", "POBLACIÓN", "MUESTRA", "EVENTO"],
-    historial_errores: ["ESPACIO MUESTRAL"],
-    total_disparos: 6
-  },
-  {
-    alumno_id: "ALUMNO_107",
-    estado_final: "victoria",
-    historial_aciertos: ["MEDIA", "MEDIANA", "MODA", "PROBABILIDAD", "FRECUENCIA"],
-    historial_errores: ["RANGO"],
-    total_disparos: 6
-  },
-  {
-    alumno_id: "ALUMNO_108",
-    estado_final: "derrota",
-    historial_aciertos: ["EVENTO", "MUESTRA"],
-    historial_errores: ["RANGO", "PROMEDIO", "MEDIANA"],
-    total_disparos: 5
-  }
-];
-
+let chartAciertos     = null;
+let chartErrores      = null;
+let allDocs           = [];    // cache de documentos Firestore (telemetría)
+let roomsMap          = new Map(); // cache de salas activas { codigo => data }
+let currentRoomFilter = 'ALL'; // filtro de sala seleccionado ('ALL' o código específico ej. 'CKKAF')
+let unsubTelemetria   = null;  // función de cancelación onSnapshot
+let unsubSalas        = null;  // función de cancelación de salas
+let toastTimer        = null;
 
 // ════════════════════════════════════════════════════════
 // 3. Utilidades
@@ -137,6 +83,19 @@ function setBarWidth(id, pct) {
   if (el) el.style.setProperty('--w', `${Math.min(100, Math.max(0, pct))}%`);
 }
 
+/** Extrae y convierte el número de intentos de un documento de forma segura */
+function parseIntentos(doc) {
+  const val = doc.total_intentos ?? doc.intentos ?? doc.total_disparos ?? doc.disparos;
+  if (typeof val === 'number' && !isNaN(val)) return val;
+  if (typeof val === 'string') {
+    const p = parseInt(val, 10);
+    if (!isNaN(p)) return p;
+  }
+  const ac = Array.isArray(doc.historial_aciertos) ? doc.historial_aciertos.length : 0;
+  const er = Array.isArray(doc.historial_errores)  ? doc.historial_errores.length  : 0;
+  return ac + er;
+}
+
 /** Formatea una fecha a hora local HH:MM:SS */
 function fmtTime(date) {
   return date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -165,12 +124,10 @@ function setConnectionStatus(state) {
   dot.className = 'conn-dot';
   switch (state) {
     case 'live': dot.classList.add('live'); label.textContent = 'En vivo (Firestore)'; break;
-    case 'demo': dot.classList.add('live'); label.textContent = 'Datos Simulados'; break;
-    case 'err':  dot.classList.add('err');  label.textContent = 'Sin conexión'; break;
+    case 'err':  dot.classList.add('err');  label.textContent = 'Sin conexión';        break;
     default:                                label.textContent = 'Conectando…';
   }
 }
-
 
 // ════════════════════════════════════════════════════════
 // 6. Inicializar Chart.js — Barras
@@ -257,7 +214,61 @@ function barOptions(label) {
 }
 
 // ════════════════════════════════════════════════════════
-// 7. Actualizar UI completo a partir de los documentos
+// 7. Gestión del Filtro por Código de Sala
+// ════════════════════════════════════════════════════════
+
+function applyRoomFilter(newCode = null) {
+  const input = document.getElementById('room-input');
+
+  if (newCode !== null) {
+    currentRoomFilter = String(newCode).trim().toUpperCase();
+  } else if (input && input.value.trim()) {
+    currentRoomFilter = input.value.trim().toUpperCase();
+  } else {
+    currentRoomFilter = '';
+  }
+
+  if (input && newCode !== null) {
+    input.value = currentRoomFilter;
+  }
+
+  // Actualizar metadatos de sala en los badges superiores
+  updateRoomMetaBadge(currentRoomFilter);
+
+  // Filtrar documentos de telemetría
+  const filteredDocs = (!currentRoomFilter || currentRoomFilter === 'ALL')
+    ? allDocs
+    : allDocs.filter(d => String(d.codigo_sala || '').toUpperCase() === currentRoomFilter);
+
+  updateDashboard(filteredDocs);
+}
+
+function updateRoomMetaBadge(code) {
+  const materiaEl = document.getElementById('room-meta-materia');
+  const temaEl    = document.getElementById('room-meta-tema');
+  if (!materiaEl || !temaEl) return;
+
+  if (!code || code === 'ALL') {
+    materiaEl.style.display = 'none';
+    temaEl.style.display    = 'none';
+    return;
+  }
+
+  const roomInfo = roomsMap.get(code) || roomsMap.get(code.toLowerCase());
+  if (roomInfo && (roomInfo.materia || roomInfo.tema)) {
+    materiaEl.style.display = 'inline-block';
+    temaEl.style.display    = 'inline-block';
+    materiaEl.textContent = `Materia: ${roomInfo.materia || '—'}`;
+    temaEl.textContent    = `Tema: ${roomInfo.tema || '—'}`;
+  } else {
+    // Si no tiene materia/tema registrados en salas-activas, ocultar badges limpios
+    materiaEl.style.display = 'none';
+    temaEl.style.display    = 'none';
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// 8. Actualizar UI completo a partir de los documentos
 // ════════════════════════════════════════════════════════
 function updateDashboard(docs) {
   const total = docs.length;
@@ -266,43 +277,52 @@ function updateDashboard(docs) {
   setEl('val-alumnos', total.toLocaleString('es-MX'));
 
   // ── KPI 2: Tasa de victorias ──
-  const victorias  = docs.filter(d => d.estado_final === 'victoria').length;
-  const pctVic     = total > 0 ? Math.round((victorias / total) * 100) : 0;
+  const victorias = docs.filter(d => String(d.estado_final).toLowerCase() === 'victoria').length;
+  const pctVic    = total > 0 ? Math.round((victorias / total) * 100) : 0;
   setEl('val-victorias', `${pctVic}%`);
   setBarWidth('fill-victorias', pctVic);
-  setEl('note-victorias', `${victorias} de ${total} alumnos con estado_final = "victoria"`);
   const trackVic = document.getElementById('fill-victorias')?.closest('[role=progressbar]');
   if (trackVic) trackVic.setAttribute('aria-valuenow', pctVic);
 
-  // ── KPI 3: Efectividad global ──
-  let totalAciertos = 0, totalDisparos = 0;
+  // ── KPI 3: Precision Global ──
+  // Σaciertos / Σ(aciertos+errores) × 100
+  let totalAciertos = 0, totalPreguntas = 0;
   docs.forEach(d => {
     const ac = Array.isArray(d.historial_aciertos) ? d.historial_aciertos.length : 0;
-    totalAciertos += ac;
-    totalDisparos += (typeof d.total_disparos === 'number') ? d.total_disparos : 0;
+    const er = Array.isArray(d.historial_errores)  ? d.historial_errores.length  : 0;
+    totalAciertos  += ac;
+    totalPreguntas += (ac + er);
   });
-  const pctEfec = totalDisparos > 0 ? Math.round((totalAciertos / totalDisparos) * 100) : 0;
-  setEl('val-efectividad', `${pctEfec}%`);
-  setBarWidth('fill-efectividad', pctEfec);
-  const trackEf = document.getElementById('fill-efectividad')?.closest('[role=progressbar]');
-  if (trackEf) trackEf.setAttribute('aria-valuenow', pctEfec);
+  const pctPrec = totalPreguntas > 0 ? Math.round((totalAciertos / totalPreguntas) * 100) : 0;
+  setEl('val-precision', `${pctPrec}%`);
+  setBarWidth('fill-precision', pctPrec);
+  const trackPr = document.getElementById('fill-precision')?.closest('[role=progressbar]');
+  if (trackPr) trackPr.setAttribute('aria-valuenow', pctPrec);
+
+  // ── KPI 4: Promedio de Intentos ──
+  let totalIntentos = 0;
+  docs.forEach(d => {
+    totalIntentos += parseIntentos(d);
+  });
+  const promedioIntentos = total > 0 ? (totalIntentos / total).toFixed(1) : '—';
+  setEl('val-intentos', promedioIntentos);
 
   // ── Charts: consolidar historial global ──
-  const allAciertos = docs.flatMap(d => Array.isArray(d.historial_aciertos) ? d.historial_aciertos : []);
-  const allErrores  = docs.flatMap(d => Array.isArray(d.historial_errores)  ? d.historial_errores  : []);
+  const allAciertosArr = docs.flatMap(d => Array.isArray(d.historial_aciertos) ? d.historial_aciertos : []);
+  const allErroresArr  = docs.flatMap(d => Array.isArray(d.historial_errores)  ? d.historial_errores  : []);
 
-  const top5Aciertos = topN(calcFrequencies(allAciertos), 5);
-  const top5Errores  = topN(calcFrequencies(allErrores),  5);
+  const top5Aciertos = topN(calcFrequencies(allAciertosArr), 5);
+  const top5Errores  = topN(calcFrequencies(allErroresArr),  5);
 
   if (chartAciertos) {
-    chartAciertos.data.labels                = top5Aciertos.map(i => i.label);
-    chartAciertos.data.datasets[0].data      = top5Aciertos.map(i => i.count);
+    chartAciertos.data.labels                    = top5Aciertos.map(i => i.label);
+    chartAciertos.data.datasets[0].data          = top5Aciertos.map(i => i.count);
     chartAciertos.data.datasets[0].backgroundColor = AZULES.slice(0, top5Aciertos.length);
     chartAciertos.update();
   }
   if (chartErrores) {
-    chartErrores.data.labels                = top5Errores.map(i => i.label);
-    chartErrores.data.datasets[0].data      = top5Errores.map(i => i.count);
+    chartErrores.data.labels                    = top5Errores.map(i => i.label);
+    chartErrores.data.datasets[0].data          = top5Errores.map(i => i.count);
     chartErrores.data.datasets[0].backgroundColor = ERRORES_COLORS.slice(0, top5Errores.length);
     chartErrores.update();
   }
@@ -311,38 +331,35 @@ function updateDashboard(docs) {
   renderTable(docs);
 
   // ── Distribucion victoria / derrota ──
-  const derrotas  = total - victorias;
-  const pctDerrota = total > 0 ? Math.round((derrotas  / total) * 100) : 0;
+  const derrotas   = total - victorias;
+  const pctDerrota = total > 0 ? Math.round((derrotas / total) * 100) : 0;
   setBarWidth('dist-victoria', pctVic);
   setBarWidth('dist-derrota',  pctDerrota);
   setEl('dist-pct-victoria', `${pctVic}%`);
   setEl('dist-pct-derrota',  `${pctDerrota}%`);
 
   // ── Alerta pedagogica ──
-  updateAlertAndRecs(top5Errores, pctEfec);
+  updateAlertAndRecs(top5Errores, pctPrec);
 
   // ── Timestamp ──
   setEl('ts-text', `Actualizado: ${fmtTime(new Date())}`);
-  const recTime = document.getElementById('rec-time');
-  if (recTime) {
-    const now = new Date();
-    recTime.setAttribute('datetime', now.toISOString());
-    recTime.textContent = fmtTime(now);
-  }
 }
 
 // ════════════════════════════════════════════════════════
-// 8. Tabla de resultados
+// 9. Tabla de resultados
 // ════════════════════════════════════════════════════════
 function renderTable(docs) {
   const tbody   = document.getElementById('tbody-students');
   const counter = document.getElementById('student-count');
   if (!tbody) return;
 
-  // Filtra por busqueda activa
+  // Filtrar por busqueda activa: nombre del alumno O codigo de sala
   const q = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
   const filtered = q
-    ? docs.filter(d => String(d.alumno_id || '').toLowerCase().includes(q))
+    ? docs.filter(d =>
+        String(d.alumno_id   || '').toLowerCase().includes(q) ||
+        String(d.codigo_sala || '').toLowerCase().includes(q)
+      )
     : docs;
 
   if (counter) counter.textContent = filtered.length;
@@ -350,9 +367,9 @@ function renderTable(docs) {
   if (!filtered.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" class="td-empty" aria-live="polite">
+        <td colspan="7" class="td-empty" aria-live="polite">
           <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <span>${q ? 'No se encontraron alumnos con ese criterio.' : 'Sin datos en la coleccion.'}</span>
+          <span>${q ? 'No se encontraron resultados con ese criterio.' : 'Sin resultados para la sala seleccionada.'}</span>
         </td>
       </tr>`;
     return;
@@ -362,17 +379,19 @@ function renderTable(docs) {
 }
 
 function buildRow(doc, idx) {
-  const alumnoId  = doc.alumno_id || `—`;
-  const estado    = doc.estado_final || '—';
-  const aciertos  = Array.isArray(doc.historial_aciertos) ? doc.historial_aciertos.length : 0;
-  const errores   = Array.isArray(doc.historial_errores)  ? doc.historial_errores.length  : 0;
-  const disparos  = typeof doc.total_disparos === 'number' ? doc.total_disparos : 0;
-  const efect     = disparos > 0 ? Math.round((aciertos / disparos) * 100) : 0;
+  const alumnoId   = doc.alumno_id   || '—';
+  const codigoSala = doc.codigo_sala || '—';
+  const estado     = String(doc.estado_final || '—').toLowerCase();
+  const aciertos   = Array.isArray(doc.historial_aciertos) ? doc.historial_aciertos.length : 0;
+  const errores    = Array.isArray(doc.historial_errores)  ? doc.historial_errores.length  : 0;
+  const intentos   = parseIntentos(doc);
+  const preguntas  = aciertos + errores;
+  const precision  = preguntas > 0 ? Math.round((aciertos / preguntas) * 100) : 0;
 
   const pillClass = estado === 'victoria' ? 'pill-victoria' : 'pill-derrota';
   const pillLabel = estado.charAt(0).toUpperCase() + estado.slice(1);
 
-  const fillClass = efect >= 70 ? 'high' : efect < 40 ? 'low' : '';
+  const fillClass = precision >= 70 ? 'high' : precision < 40 ? 'low' : '';
   const initials  = alumnoId.slice(0, 2).toUpperCase();
 
   return `
@@ -390,6 +409,9 @@ function buildRow(doc, idx) {
         </div>
       </td>
       <td class="tc">
+        <span class="sala-badge">${codigoSala}</span>
+      </td>
+      <td class="tc">
         <span class="status-pill ${pillClass}" aria-label="Estado: ${pillLabel}">${pillLabel}</span>
       </td>
       <td class="tc" aria-label="${aciertos} aciertos">
@@ -398,36 +420,34 @@ function buildRow(doc, idx) {
       <td class="tc" aria-label="${errores} errores">
         <strong style="color:var(--red)">${errores}</strong>
       </td>
-      <td class="tc">${disparos}</td>
+      <td class="tc">${intentos}</td>
       <td class="tc">
         <div class="efect-bar-wrap">
           <div class="efect-mini">
-            <div class="efect-fill ${fillClass}" style="width:${efect}%"></div>
+            <div class="efect-fill ${fillClass}" style="width:${precision}%"></div>
           </div>
-          <span style="font-weight:600;font-size:.8rem">${efect}%</span>
+          <span style="font-weight:600;font-size:.8rem">${precision}%</span>
         </div>
       </td>
     </tr>`;
 }
 
 // ════════════════════════════════════════════════════════
-// 9. Alerta pedagogica y recomendaciones
+// 10. Alerta pedagogica y recomendaciones
 // ════════════════════════════════════════════════════════
-function updateAlertAndRecs(top5Errores, pctEfec) {
-  // Alerta: concepto mas frecuente en errores
+function updateAlertAndRecs(top5Errores, pctPrec) {
   const alertText = document.getElementById('alert-text');
   if (alertText) {
     if (top5Errores.length) {
       const topConcept = top5Errores[0].label;
       alertText.textContent =
-        `Se sugiere repasar el concepto de "${topConcept}" ` +
-        `(aparece ${top5Errores[0].count} veces en historial_errores grupal).`;
+        `Se sugiere repasar "${topConcept}" ` +
+        `(${top5Errores[0].count} ocurrencia${top5Errores[0].count !== 1 ? 's' : ''} en historial_errores grupal).`;
     } else {
-      alertText.textContent = 'No se han registrado errores aun.';
+      alertText.textContent = 'No se han registrado errores aún.';
     }
   }
 
-  // Lista de recomendaciones (top 3 de errores)
   const recList = document.getElementById('rec-list');
   if (recList) {
     if (!top5Errores.length) {
@@ -445,22 +465,21 @@ function updateAlertAndRecs(top5Errores, pctEfec) {
             </div>
           </li>`;
       });
-      // Agrega recomendacion de efectividad si es baja
-      if (pctEfec < 50) {
+      if (pctPrec < 50) {
         items.push(`
           <li class="rec-item">
             <div class="rec-item-mark">⚠</div>
             <div class="rec-item-text">
-              <strong>Efectividad Grupal Baja (${pctEfec}%)</strong>
-              <p>Se recomienda revisar la estrategia didactica y reforzar conceptos base.</p>
+              <strong>Precisión Grupal Baja (${pctPrec}%)</strong>
+              <p>Se recomienda revisar la estrategia didáctica y reforzar los conceptos base.</p>
             </div>
           </li>`);
-      } else if (pctEfec >= 80) {
+      } else if (pctPrec >= 80) {
         items.push(`
           <li class="rec-item">
             <div class="rec-item-mark">✓</div>
             <div class="rec-item-text">
-              <strong>Efectividad Satisfactoria (${pctEfec}%)</strong>
+              <strong>Precisión Satisfactoria (${pctPrec}%)</strong>
               <p>El grupo muestra buen dominio general. Comunicar el logro al grupo.</p>
             </div>
           </li>`);
@@ -471,63 +490,135 @@ function updateAlertAndRecs(top5Errores, pctEfec) {
 }
 
 // ════════════════════════════════════════════════════════
-// 10. Exportar CSV (solo lectura de allDocs en memoria)
+// 11. Exportar CSV (lectura de allDocs filtrados)
 // ════════════════════════════════════════════════════════
 function exportCSV() {
-  if (!allDocs.length) { toast('No hay datos para exportar.', 'err'); return; }
-  const header = ['alumno_id', 'estado_final', 'aciertos', 'errores', 'total_disparos', 'efectividad_%'];
-  const rows = allDocs.map(d => {
-    const ac  = Array.isArray(d.historial_aciertos) ? d.historial_aciertos.length : 0;
-    const er  = Array.isArray(d.historial_errores)  ? d.historial_errores.length  : 0;
-    const dis = typeof d.total_disparos === 'number' ? d.total_disparos : 0;
-    const ef  = dis > 0 ? Math.round((ac / dis) * 100) : 0;
-    return [d.alumno_id || '', d.estado_final || '', ac, er, dis, ef];
+  const docsToExport = currentRoomFilter === 'ALL'
+    ? allDocs
+    : allDocs.filter(d => String(d.codigo_sala || '').toUpperCase() === currentRoomFilter);
+
+  if (!docsToExport.length) { toast('No hay datos para exportar.', 'err'); return; }
+  const header = ['alumno_id', 'codigo_sala', 'estado_final', 'aciertos', 'errores', 'total_intentos', 'precision_%'];
+  const rows = docsToExport.map(d => {
+    const ac   = Array.isArray(d.historial_aciertos) ? d.historial_aciertos.length : 0;
+    const er   = Array.isArray(d.historial_errores)  ? d.historial_errores.length  : 0;
+    const int  = parseIntentos(d);
+    const prec = (ac + er) > 0 ? Math.round((ac / (ac + er)) * 100) : 0;
+    return [d.alumno_id || '', d.codigo_sala || '', d.estado_final || '', ac, er, int, prec];
   });
   const csv  = [header, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
-  const a    = Object.assign(document.createElement('a'), { href: url, download: 'lore_telemetria.csv' });
+  const fileName = currentRoomFilter === 'ALL' ? 'lore_telemetria_global.csv' : `lore_telemetria_${currentRoomFilter}.csv`;
+  const a    = Object.assign(document.createElement('a'), { href: url, download: fileName });
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  toast('Exportacion lista: lore_telemetria.csv');
+  toast(`Exportación lista: ${fileName}`);
 }
 
 // ════════════════════════════════════════════════════════
-// 11. Busqueda
+// 12. Busqueda y Eventos de Sala
 // ════════════════════════════════════════════════════════
+function setupRoomEvents() {
+  const input  = document.getElementById('room-input');
+  const btn    = document.getElementById('btn-apply-room');
+
+  if (btn) {
+    btn.addEventListener('click', () => {
+      if (input) {
+        applyRoomFilter(input.value.trim());
+      }
+    });
+  }
+
+  if (input) {
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyRoomFilter(input.value.trim());
+      }
+    });
+    input.addEventListener('input', () => {
+      applyRoomFilter(input.value.trim());
+    });
+  }
+}
+
 function setupSearch() {
   const inp = document.getElementById('search-input');
   if (!inp) return;
-  inp.addEventListener('input', () => renderTable(allDocs));
+  inp.addEventListener('input', () => {
+    const filteredDocs = (!currentRoomFilter || currentRoomFilter === 'ALL')
+      ? allDocs
+      : allDocs.filter(d => String(d.codigo_sala || '').toUpperCase() === currentRoomFilter);
+    renderTable(filteredDocs);
+  });
 }
 
-function loadMockTelemetria() {
-  console.log('[LORE] Cargar datos simulados de telemetría en el Dashboard.');
-  if (Array.isArray(window.SERVER_DEMO_DATA) && window.SERVER_DEMO_DATA.length > 0) {
-    allDocs = window.SERVER_DEMO_DATA;
-    toast('Dashboard cargado con conceptos clave de tu PDF', 'ok');
-  } else {
-    allDocs = MOCK_TELEMETRIA;
-    toast('Mostrando datos simulados de demostración', 'ok');
+// ════════════════════════════════════════════════════════
+// 13. Estado de error — sin conexion a Firebase
+// ════════════════════════════════════════════════════════
+function showFirebaseError() {
+  setConnectionStatus('err');
+  const tbody = document.getElementById('tbody-students');
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="td-empty" aria-live="polite">
+          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>No se pudo conectar con Firestore.<br>Verifica la configuración en firebase-config.js.</span>
+        </td>
+      </tr>`;
   }
-  updateDashboard(allDocs);
-  setConnectionStatus('demo');
+  ['val-alumnos', 'val-victorias', 'val-precision', 'val-intentos'].forEach(id => setEl(id, '—'));
+  toast('Sin conexión a Firestore. Verifica firebase-config.js.', 'err');
 }
 
+// ════════════════════════════════════════════════════════
+// 14. Suscripcion en tiempo real a salas_activas / salas-activas
+// ════════════════════════════════════════════════════════
+function subscribeToSalas() {
+  if (!window.firebaseReady || !window.db) return;
 
+  const colRef = window.db.collection('salas-activas');
+
+  unsubSalas = colRef.onSnapshot(
+    (snapshot) => {
+      roomsMap.clear();
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data && doc.id) {
+          roomsMap.set(doc.id.toUpperCase(), data);
+          if (data.codigo) roomsMap.set(data.codigo.toUpperCase(), data);
+        }
+      });
+      updateRoomMetaBadge(currentRoomFilter);
+    },
+    (err) => {
+      window.db.collection('salas_activas').onSnapshot(snap => {
+        roomsMap.clear();
+        snap.docs.forEach(doc => {
+          const data = doc.data();
+          if (data && doc.id) {
+            roomsMap.set(doc.id.toUpperCase(), data);
+            if (data.codigo) roomsMap.set(data.codigo.toUpperCase(), data);
+          }
+        });
+        updateRoomMetaBadge(currentRoomFilter);
+      });
+    }
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// 15. Suscripcion en tiempo real a telemetria_resultados
+// ════════════════════════════════════════════════════════
 function subscribeToTelemetria() {
-  // Si se ha subido un PDF en esta sesión, priorizar sus conceptos generados
-  if (Array.isArray(window.SERVER_DEMO_DATA) && window.SERVER_DEMO_DATA.length > 0) {
-    console.log('[LORE] Mostrando telemetría simulada del PDF activo en sesión.');
-    loadMockTelemetria();
-    return;
-  }
-
   if (!window.firebaseReady || !window.db) {
-    console.warn('[LORE] Firebase no está disponible. Usando datos simulados de respaldo.');
-    loadMockTelemetria();
+    console.warn('[LORE] Firebase no está disponible. Verifica firebase-config.js.');
+    showFirebaseError();
     return;
   }
 
@@ -535,43 +626,63 @@ function subscribeToTelemetria() {
 
   unsubTelemetria = colRef.onSnapshot(
     (snapshot) => {
-      if (snapshot.empty) {
-        console.log('[LORE] Colección telemetria_resultados vacía. Cargando datos simulados.');
-        loadMockTelemetria();
-      } else {
-        allDocs = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
-        updateDashboard(allDocs);
+      const validDocs = snapshot.docs
+        .map(doc => ({ _id: doc.id, ...doc.data() }))
+        .filter(d => d && (Boolean(d.alumno_id) || Boolean(d.codigo_sala)));
+
+      if (validDocs.length === 0) {
+        console.log('[LORE] telemetria_resultados sin datos aún.');
+        allDocs = [];
+        applyRoomFilter(currentRoomFilter);
         setConnectionStatus('live');
+        return;
       }
+
+      allDocs = validDocs;
+      applyRoomFilter(currentRoomFilter);
+      setConnectionStatus('live');
     },
     (err) => {
       console.error('[LORE] Error al leer Firestore:', err);
-      loadMockTelemetria();
+      showFirebaseError();
     }
   );
 }
 
-
-
 // ════════════════════════════════════════════════════════
-// 13. Bootstrap
+// 16. Bootstrap
 // ════════════════════════════════════════════════════════
 window.addEventListener('beforeunload', () => {
   if (typeof unsubTelemetria === 'function') unsubTelemetria();
+  if (typeof unsubSalas === 'function') unsubSalas();
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Inicializar graficas vacias
+  // Inicializar gráficas vacías
   initChartAciertos();
   initChartErrores();
 
-  // Estado inicial de conexion
+  // Leer parámetro URL ?sala= o ?codigo= (ej. /dashboard?sala=CKKAF)
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialRoom = urlParams.get('sala') || urlParams.get('code') || urlParams.get('codigo');
+  if (initialRoom) {
+    const roomInput = document.getElementById('room-input');
+    const cleanCode = initialRoom.trim().toUpperCase();
+    if (roomInput) roomInput.value = cleanCode;
+    currentRoomFilter = cleanCode;
+  }
+
+  // Estado inicial de conexión
   setConnectionStatus('wait');
 
-  // Conectar a Firestore
+  // Configurar eventos del filtro de sala
+  setupRoomEvents();
+
+  // Conectar a Firestore en tiempo real
+  subscribeToSalas();
   subscribeToTelemetria();
 
-  // Busqueda
+  // Búsqueda por alumno o código de sala
   setupSearch();
 
   // Exportar CSV

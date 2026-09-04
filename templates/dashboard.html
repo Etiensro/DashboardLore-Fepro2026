@@ -9,17 +9,28 @@
 
 {% block content %}
 
-  <!-- Barra de contexto -->
-  <div class="context-bar">
-    <div class="context-breadcrumb" aria-label="Ruta de navegación">
-      <span>Dashboard</span>
-      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
-      <span>Seguimiento Académico</span>
-      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
-      <span class="breadcrumb-current">Resultados — Escape Room</span>
+  <!-- ═══ BARRA DE SELECCIÓN Y FILTRO DE CÓDIGO DE SALA ═════════════════ -->
+  <section class="room-control-bar" aria-label="Filtro de Código de Sala">
+    <div class="room-control-left">
+      <label for="room-input" class="room-label">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+        </svg>
+        <span>Código de Sala:</span>
+      </label>
+      <div class="room-input-wrap">
+        <input type="text" id="room-input" class="room-input" placeholder="Ej. CKKAF" value="" maxlength="10" aria-label="Escribir código de sala">
+        <button id="btn-apply-room" class="btn-room-apply" title="Filtrar por este código" aria-label="Aplicar filtro de sala">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+      </div>
     </div>
-  </div>
 
+    <div class="room-control-right">
+      <span class="room-meta-pill" id="room-meta-materia">Materia: —</span>
+      <span class="room-meta-pill" id="room-meta-tema">Tema: —</span>
+    </div>
+  </section>
 
   <!-- ═══ KPI CARDS ═════════════════════════════════════════════════════ -->
   <section class="kpi-grid" aria-label="Indicadores clave de rendimiento">
@@ -36,7 +47,6 @@
         <div class="kpi-value-row">
           <span class="kpi-value" id="val-alumnos">—</span>
         </div>
-        <p class="kpi-note">Total de documentos en la colección</p>
       </div>
     </article>
 
@@ -54,7 +64,6 @@
         <div class="kpi-track" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-labelledby="kpi2-title">
           <div class="kpi-fill kpi-fill--green" id="fill-victorias" style="--w:0%"></div>
         </div>
-        <p class="kpi-note" id="note-victorias">estado_final === "victoria"</p>
       </div>
     </article>
 
@@ -65,14 +74,27 @@
         </svg>
       </div>
       <div class="kpi-body">
-        <p class="kpi-label" id="kpi3-title">Efectividad Global</p>
+        <p class="kpi-label" id="kpi3-title">Precisión Global</p>
         <div class="kpi-value-row">
-          <span class="kpi-value" id="val-efectividad">—</span>
+          <span class="kpi-value" id="val-precision">—</span>
         </div>
         <div class="kpi-track" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-labelledby="kpi3-title">
-          <div class="kpi-fill" id="fill-efectividad" style="--w:0%"></div>
+          <div class="kpi-fill" id="fill-precision" style="--w:0%"></div>
         </div>
-        <p class="kpi-note">(total_aciertos / total_disparos) × 100</p>
+      </div>
+    </article>
+
+    <article class="kpi-card" aria-labelledby="kpi4-title">
+      <div class="kpi-icon kpi-icon--amber" aria-hidden="true">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+      </div>
+      <div class="kpi-body">
+        <p class="kpi-label" id="kpi4-title">Promedio de Intentos</p>
+        <div class="kpi-value-row">
+          <span class="kpi-value" id="val-intentos">—</span>
+        </div>
       </div>
     </article>
 
@@ -135,8 +157,8 @@
               type="search"
               id="search-input"
               class="search-input"
-              placeholder="Buscar alumno_id…"
-              aria-label="Buscar alumno por ID en la tabla de resultados"
+              placeholder="Buscar alumno o sala…"
+              aria-label="Buscar alumno por ID o sala en la tabla de resultados"
             />
           </div>
           <button class="btn-export" id="btn-export" aria-label="Exportar tabla a CSV">
@@ -150,16 +172,17 @@
           <thead>
             <tr>
               <th scope="col">Alumno</th>
+              <th scope="col" class="tc">Sala</th>
               <th scope="col" class="tc">Estado</th>
               <th scope="col" class="tc">Aciertos</th>
               <th scope="col" class="tc">Errores</th>
-              <th scope="col" class="tc">Disparos</th>
-              <th scope="col" class="tc">Efectividad %</th>
+              <th scope="col" class="tc">Intentos</th>
+              <th scope="col" class="tc">Precisión %</th>
             </tr>
           </thead>
           <tbody id="tbody-students">
             <tr>
-              <td colspan="6" class="td-empty" aria-live="polite">
+              <td colspan="7" class="td-empty" aria-live="polite">
                 <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 <span>Esperando conexión con Firestore…</span>
               </td>
